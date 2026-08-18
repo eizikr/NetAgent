@@ -1,0 +1,12 @@
+build/
+netagent
+
+*.o
+*.a
+*.so
+
+.vscode/
+.idea/
+
+*.swp
+*~
