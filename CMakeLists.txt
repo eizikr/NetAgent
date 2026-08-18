@@ -8,6 +8,11 @@ set(CMAKE_C_EXTENSIONS OFF)		# Work with ISO C and not GNU dialect
 
 add_executable(netagent
 	src/main.c
+        src/ethernet.c
+)
+
+target_include_directories(netagent PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_compile_options(netagent PRIVATE	# Add warnings, private because those flags belong to the target - netagent
