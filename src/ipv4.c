@@ -24,7 +24,16 @@ int parse_ipv4(const uint8_t *buffer, size_t length, IPv4Header *header){
     		return -1;
 	}
 
+
+
 	header->total_length = ((uint16_t)buffer[2] << 8) | buffer[3];
+	if (header->total_length > length) {
+		return -1;
+	}
+
+	if (header->total_length < header_length) {
+		return -1;
+	}
 	header->ttl = buffer[8];
 	header->protocol = buffer[9];
 	header->src_addr =
@@ -42,3 +51,5 @@ int parse_ipv4(const uint8_t *buffer, size_t length, IPv4Header *header){
 
 	return 0;
 }
+
+
