@@ -9,6 +9,7 @@ set(CMAKE_C_EXTENSIONS OFF)		# Work with ISO C and not GNU dialect
 add_executable(netagent
 	src/main.c
         src/ethernet.c
+	src/ipv4.c
 )
 
 target_include_directories(netagent PRIVATE

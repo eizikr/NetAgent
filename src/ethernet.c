@@ -2,6 +2,7 @@
 #include "netagent/ethernet.h"
 #include <string.h>
 
+
 int parse_ethernet(const uint8_t *buffer, size_t length, EthernetHeader *header)
 {
     if (buffer == NULL){
