@@ -12,6 +12,7 @@ add_executable(netagent
 	src/ipv4.c
 	src/packet.c
 	src/icmp.c
+	src/udp.c
 )
 
 target_include_directories(netagent PRIVATE

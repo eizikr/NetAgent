@@ -6,9 +6,16 @@
 #include "netagent/ethernet.h"
 #include "netagent/ipv4.h"
 #include "netagent/icmp.h"
+#include "netagent/udp.h"
 
 static int dispatch_ipv4_protocol(
     uint8_t protocol,
+    const uint8_t *payload,
+    size_t payload_length
+);
+
+static int dispatch_udp_payload(
+    uint16_t dst_port,
     const uint8_t *payload,
     size_t payload_length
 );
@@ -67,28 +74,26 @@ int process_packet(const uint8_t *packet, size_t length){
     const uint8_t   *payload =          ipv4_buffer + ipv4_header_length;
     size_t           payload_length =   ipv4_length - ipv4_header_length;
 
-
-	//	Print MAC headder (Length = 12)
 	puts("MAC Header:");
-        printf("Destination MAC:     %02x:%02x:%02x:%02x:%02x:%02x\n",
-        	header.dst_mac[0],
-            header.dst_mac[1],
-        	header.dst_mac[2],
-        	header.dst_mac[3],
-        	header.dst_mac[4],
-        	header.dst_mac[5]);
+    
+    printf("Destination MAC:     %02x:%02x:%02x:%02x:%02x:%02x\n",
+        header.dst_mac[0],
+        header.dst_mac[1],
+        header.dst_mac[2],
+        header.dst_mac[3],
+        header.dst_mac[4],
+        header.dst_mac[5]);
 
-    	printf("Source MAC:          %02x:%02x:%02x:%02x:%02x:%02x\n",
-        	header.src_mac[0],
-        	header.src_mac[1],
-        	header.src_mac[2],
-        	header.src_mac[3],
-        	header.src_mac[4],
-        	header.src_mac[5]);
+    printf("Source MAC:          %02x:%02x:%02x:%02x:%02x:%02x\n",
+        header.src_mac[0],
+        header.src_mac[1],
+        header.src_mac[2],
+        header.src_mac[3],
+        header.src_mac[4],
+        header.src_mac[5]);
 
-    	printf("EtherType:           0x%04x\n", header.ethertype);
+    printf("EtherType:           0x%04x\n", header.ethertype);
 
-	//	Print IPv4 headder (Length = 20)
 	char src_ip[INET_ADDRSTRLEN];
 	char dst_ip[INET_ADDRSTRLEN];
 
@@ -115,18 +120,29 @@ int process_packet(const uint8_t *packet, size_t length){
 static int dispatch_ipv4_protocol(uint8_t protocol, const uint8_t *payload, size_t payload_length){
     switch (protocol) {
         case IP_PROTO_ICMP: {
-            /* parse_icmp(payload, payload_length); */
             ICMPHeader icmp_header;
             int result = parse_icmp(payload, payload_length, &icmp_header);
             if (result != 0) {
                 fprintf(stderr, "Failed to parse ICMP header\n");
                 return result;
             }
-            puts("\nICMP");
-            printf("Type:           %u\n", icmp_header.type);
-            printf("Code:           %u\n", icmp_header.code);
-            printf("Identifier:     %u\n", icmp_header.identifier);
-            printf("Sequence:       %u\n", icmp_header.sequence);
+            switch (icmp_header.type) {
+                case ICMP_ECHO_REQUEST:
+                    puts("\nICMP Echo Request");
+                    break;
+
+                case ICMP_ECHO_REPLY:
+                    puts("\nICMP Echo Reply");
+                    break;
+
+                default:
+                    printf("\nICMP Type: %u\n", icmp_header.type);
+                    break;
+            }
+            printf("Type:                %u\n", icmp_header.type);
+            printf("Code:                %u\n", icmp_header.code);
+            printf("Identifier:          %u\n", icmp_header.identifier);
+            printf("Sequence:            %u\n", icmp_header.sequence);
             break;
         }
         case IP_PROTO_TCP:
@@ -135,9 +151,35 @@ static int dispatch_ipv4_protocol(uint8_t protocol, const uint8_t *payload, size
             break;
 
         case IP_PROTO_UDP:
-            /* parse_udp(payload, payload_length); */
-            puts("UDP protocol detected");
-            break;
+            UDPHeader udp_header;
+
+            int result = parse_udp(payload, payload_length, &udp_header);
+            
+            if (result != 0) {
+                fprintf(stderr, "Failed to parse UDP header\n");
+                return result;
+            }
+            if (udp_header.length < UDP_HEADER_SIZE) {
+                return -1;
+            }
+            if (udp_header.length > payload_length) {
+                return -1;
+            }
+
+            size_t udp_payload_length = udp_header.length - UDP_HEADER_SIZE;
+            const uint8_t *udp_payload = payload + UDP_HEADER_SIZE;
+
+            puts("\nUDP");
+            printf("Source Port:         %u\n", udp_header.src_port);
+            printf("Destination Port:    %u\n", udp_header.dst_port);
+            printf("Length:              %u\n", udp_header.length);
+            printf("Checksum:            0x%04x\n", udp_header.checksum);
+
+            return dispatch_udp_payload(
+                udp_header.dst_port,
+                udp_payload,
+                udp_payload_length
+            );
 
         default:
             /* unsupported */
@@ -146,4 +188,24 @@ static int dispatch_ipv4_protocol(uint8_t protocol, const uint8_t *payload, size
     }
     return 0;
 
+}
+
+static int dispatch_udp_payload(
+    uint16_t dst_port,
+    const uint8_t *payload,
+    size_t payload_length)
+{
+    (void)payload;
+    switch (dst_port) {
+    case 50000:
+        printf("TWAMP traffic detected on UDP port %u\n", dst_port);
+        printf("TWAMP payload length: %zu bytes\n", payload_length);
+        break;
+
+    default:
+        printf("Generic UDP traffic on port %u\n", dst_port);
+        break;
+    }
+
+    return 0;
 }
