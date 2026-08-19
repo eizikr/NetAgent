@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 
 #include "netagent/ethernet.h"
+#include "netagent/twamp.h"
 #include "netagent/ipv4.h"
 #include "netagent/icmp.h"
 #include "netagent/udp.h"
@@ -75,7 +76,7 @@ int process_packet(const uint8_t *packet, size_t length){
     size_t           payload_length =   ipv4_length - ipv4_header_length;
 
 	puts("MAC Header:");
-    
+
     printf("Destination MAC:     %02x:%02x:%02x:%02x:%02x:%02x\n",
         header.dst_mac[0],
         header.dst_mac[1],
@@ -197,9 +198,19 @@ static int dispatch_udp_payload(
 {
     (void)payload;
     switch (dst_port) {
-    case 50000:
-        printf("TWAMP traffic detected on UDP port %u\n", dst_port);
-        printf("TWAMP payload length: %zu bytes\n", payload_length);
+    case 20481:
+        TWAMPSenderPacket twamp_packet;
+        int result = parse_twamp_sender(payload, payload_length, &twamp_packet);
+        if (result != 0) {
+            fprintf(stderr, "Failed to parse TWAMP sender packet\n");
+            return result;
+        }
+
+        puts("\nTWAMP Sender Packet:");
+        printf("Sequence Number:     %u\n", twamp_packet.sequence_number);
+        printf("Timestamp Seconds:   0x%08x\n", twamp_packet.timestamp_seconds);
+        printf("Timestamp Fraction:  0x%08x\n", twamp_packet.timestamp_fraction);
+        printf("Error Estimate:      0x%04x\n", twamp_packet.error_estimate);
         break;
 
     default:

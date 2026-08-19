@@ -13,6 +13,7 @@ add_executable(netagent
 	src/packet.c
 	src/icmp.c
 	src/udp.c
+	src/twamp.c
 )
 
 target_include_directories(netagent PRIVATE
