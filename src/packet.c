@@ -45,10 +45,19 @@ int process_packet(const uint8_t *packet, size_t length){
     		return result;
 	}
 
-	if (header.ethertype != 0x0800) {
- 	   fprintf(stderr, "Packet is not IPv4\n");
- 	   return 1;
-	}
+    switch (header.ethertype) {
+    case 0x0800:    // IPv4
+        break;
+
+    case 0x0806:    // ARP
+        return 0;
+
+    case 0x86DD:    // IPv6
+        return 0;
+
+    default:
+        return 0;
+    }
 
 
 	//	PARSE IPv4 HEADER
