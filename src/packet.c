@@ -84,25 +84,25 @@ int process_packet(const uint8_t *packet, size_t length){
     const uint8_t   *payload =          ipv4_buffer + ipv4_header_length;
     size_t           payload_length =   ipv4_length - ipv4_header_length;
 
-	puts("MAC Header:");
+	// puts("MAC Header:");
 
-    printf("Destination MAC:     %02x:%02x:%02x:%02x:%02x:%02x\n",
-        header.dst_mac[0],
-        header.dst_mac[1],
-        header.dst_mac[2],
-        header.dst_mac[3],
-        header.dst_mac[4],
-        header.dst_mac[5]);
+    // printf("Destination MAC:     %02x:%02x:%02x:%02x:%02x:%02x\n",
+    //     header.dst_mac[0],
+    //     header.dst_mac[1],
+    //     header.dst_mac[2],
+    //     header.dst_mac[3],
+    //     header.dst_mac[4],
+    //     header.dst_mac[5]);
 
-    printf("Source MAC:          %02x:%02x:%02x:%02x:%02x:%02x\n",
-        header.src_mac[0],
-        header.src_mac[1],
-        header.src_mac[2],
-        header.src_mac[3],
-        header.src_mac[4],
-        header.src_mac[5]);
+    // printf("Source MAC:          %02x:%02x:%02x:%02x:%02x:%02x\n",
+    //     header.src_mac[0],
+    //     header.src_mac[1],
+    //     header.src_mac[2],
+    //     header.src_mac[3],
+    //     header.src_mac[4],
+    //     header.src_mac[5]);
 
-    printf("EtherType:           0x%04x\n", header.ethertype);
+    // printf("EtherType:           0x%04x\n", header.ethertype);
 
 	char src_ip[INET_ADDRSTRLEN];
 	char dst_ip[INET_ADDRSTRLEN];
@@ -113,13 +113,12 @@ int process_packet(const uint8_t *packet, size_t length){
 	inet_ntop(AF_INET, &src_network, src_ip, sizeof(src_ip));
 	inet_ntop(AF_INET, &dst_network, dst_ip, sizeof(dst_ip));
 
-	puts("\nIPv4 Header:");
-	printf("Version:	     %02x\n",ipv4_header.version);
-    printf("ihl:                 %02x\n",ipv4_header.ihl);
-	printf("total_length:        0x%04x\n",ipv4_header.total_length);
-	printf("Source IP:           %s\n", src_ip);
-	printf("Destination IP:      %s\n", dst_ip);
-    puts("NetAgent v0.1.0");
+	// puts("\nIPv4 Header:");
+	// printf("Version:	     %02x\n",ipv4_header.version);
+    // printf("ihl:                 %02x\n",ipv4_header.ihl);
+	// printf("total_length:        0x%04x\n",ipv4_header.total_length);
+	// printf("Source IP:           %s\n", src_ip);
+	// printf("Destination IP:      %s\n", dst_ip);
 
     
     int dispatch_result = dispatch_ipv4_protocol(ipv4_header.protocol, payload, payload_length);
@@ -153,14 +152,13 @@ static int dispatch_ipv4_protocol(uint8_t protocol, const uint8_t *payload, size
             printf("Code:                %u\n", icmp_header.code);
             printf("Identifier:          %u\n", icmp_header.identifier);
             printf("Sequence:            %u\n", icmp_header.sequence);
-            break;
+            return 0;
         }
         case IP_PROTO_TCP:
-            /* parse_tcp(payload, payload_length); */
-            puts("TCP protocol detected");
-            break;
+            /* unsupported yet */
+            return 0;
 
-        case IP_PROTO_UDP:
+        case IP_PROTO_UDP:{
             UDPHeader udp_header;
 
             int result = parse_udp(payload, payload_length, &udp_header);
@@ -175,26 +173,29 @@ static int dispatch_ipv4_protocol(uint8_t protocol, const uint8_t *payload, size
             if (udp_header.length > payload_length) {
                 return -1;
             }
-
+            if (udp_header.src_port != 20481 &&
+                udp_header.dst_port != 20481) {
+                return 0;
+            }
+            
+            printf("UDP %u -> %u\n",
+                udp_header.src_port,
+                udp_header.dst_port
+            );
+            
             size_t udp_payload_length = udp_header.length - UDP_HEADER_SIZE;
             const uint8_t *udp_payload = payload + UDP_HEADER_SIZE;
-
-            puts("\nUDP");
-            printf("Source Port:         %u\n", udp_header.src_port);
-            printf("Destination Port:    %u\n", udp_header.dst_port);
-            printf("Length:              %u\n", udp_header.length);
-            printf("Checksum:            0x%04x\n", udp_header.checksum);
-
+            
             return dispatch_udp_payload(
                 udp_header.dst_port,
                 udp_payload,
                 udp_payload_length
             );
+        }
 
         default:
             /* unsupported */
-            puts("Unsupported protocol detected");
-            break;
+            return 0;
     }
     return 0;
 

@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include "netagent/capture.h"
 #include "netagent/packet.h"
 
@@ -10,9 +12,24 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <signal.h>
+
+static volatile sig_atomic_t stop_requested = 0;
+
+static void handle_sigint(int signo)
+{
+    (void)signo;
+    stop_requested = 1;
+}
+
 
 int capture_packets(const char *interface_name) {
     uint8_t buffer[PACKET_BUFFER_SIZE];
+
+    if (interface_name == NULL) {
+        fprintf(stderr, "Interface name is NULL\n");
+        return -1;
+    }
 
     int fd = socket(
         AF_PACKET,          // use layer 2 (Ethernet) socket
@@ -29,10 +46,7 @@ int capture_packets(const char *interface_name) {
         return -1;
     }
 
-    if (interface_name == NULL) {
-        fprintf(stderr, "Interface name is NULL\n");
-        return -1;
-    }
+
 
     unsigned int ifindex = if_nametoindex(interface_name); // convert "ens33" to "2"
 
@@ -55,9 +69,20 @@ int capture_packets(const char *interface_name) {
            interface_name,
            ifindex);
 
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
 
+    sa.sa_handler = handle_sigint;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
 
-    while(1){
+    if (sigaction(SIGINT, &sa, NULL) < 0) {
+        perror("sigaction");
+        goto error_handling;
+    }
+
+    while(!stop_requested){
+        
         ssize_t received_length = recvfrom(
             /*Read N bytes into BUF through socket FD.*/
             fd,
@@ -67,20 +92,24 @@ int capture_packets(const char *interface_name) {
             NULL,
             NULL
         );
+
         if (received_length < 0) {
+            if (errno == EINTR && stop_requested) {
+                break;
+            }
             perror("recvfrom");
             goto error_handling;
         }
-        printf("Captured %zd bytes\n", received_length);
 
         int result = process_packet(buffer, (size_t)received_length);
-        if (result != 0) {
+        if (result < 0) {
             fprintf(stderr, "Packet processing failed: %d\n", result);
         }
     }
 
 
 
+    puts("\nStopping NetAgent...");
     close(fd);
     return 0;
 
