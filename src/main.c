@@ -2,11 +2,17 @@
 #include "netagent/packet.h"
 #include "netagent/capture.h"
 
-int main(void){
+int main(int argc, char *argv[]){
 
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <interface>\n", argv[0]);
+        return 1;
+    }
+	char* interface_name = argv[1];
 	puts("NetAgent v0.1.0");
+	printf("Listening on interface: %s\n", interface_name);
 
-	return capture_packets("ens33");
+	return capture_packets(interface_name);
 
 }
 

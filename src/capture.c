@@ -19,7 +19,7 @@ int capture_packets(const char *interface_name) {
         SOCK_RAW,           // work with raw frames include ethernet header
         htons(ETH_P_ALL)    // get all protocols (ethernet types)
     );
-    
+
     if (fd < 0) {
         perror("socket");
         /*  about perror:
@@ -57,25 +57,26 @@ int capture_packets(const char *interface_name) {
 
 
 
+    while(1){
+        ssize_t received_length = recvfrom(
+            /*Read N bytes into BUF through socket FD.*/
+            fd,
+            buffer,
+            PACKET_BUFFER_SIZE,
+            0,
+            NULL,
+            NULL
+        );
+        if (received_length < 0) {
+            perror("recvfrom");
+            goto error_handling;
+        }
+        printf("Captured %zd bytes\n", received_length);
 
-    ssize_t received_length = recvfrom(
-        /*Read N bytes into BUF through socket FD.*/
-        fd,
-        buffer,
-        PACKET_BUFFER_SIZE,
-        0,
-        NULL,
-        NULL
-    );
-    if (received_length < 0) {
-        perror("recvfrom");
-        goto error_handling;
-    }
-    printf("Captured %zd bytes\n", received_length);
-
-    int result = process_packet(buffer, (size_t)received_length);
-    if (result != 0) {
-        fprintf(stderr, "Packet processing failed: %d\n", result);
+        int result = process_packet(buffer, (size_t)received_length);
+        if (result != 0) {
+            fprintf(stderr, "Packet processing failed: %d\n", result);
+        }
     }
 
 
