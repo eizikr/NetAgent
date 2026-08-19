@@ -1,5 +1,5 @@
 build/
-netagent
+netagent.exe
 
 *.o
 *.a
