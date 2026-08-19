@@ -6,6 +6,7 @@ int parse_twamp_sender(
     TWAMPSenderPacket *packet)
 {
     if (buffer == NULL || packet == NULL || length < TWAMP_HEADER_SIZE) {
+        puts("Invalid input to parse_twamp_sender");
         return -1;
     }
 

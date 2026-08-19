@@ -3,19 +3,20 @@
 #include "netagent/capture.h"
 #include "netagent/packet.h"
 
-#include <arpa/inet.h>
-#include <errno.h>
-#include <linux/if_ether.h>
 #include <linux/if_packet.h>
-#include <net/if.h>
-#include <stdio.h>
-#include <string.h>
+#include <linux/if_ether.h>
+#include <linux/filter.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <net/if.h>
+#include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <errno.h>
+#include <stdio.h>
 
 static volatile sig_atomic_t stop_requested = 0;
-
 static void handle_sigint(int signo)
 {
     (void)signo;
@@ -34,7 +35,7 @@ int capture_packets(const char *interface_name) {
     int fd = socket(
         AF_PACKET,          // use layer 2 (Ethernet) socket
         SOCK_RAW,           // work with raw frames include ethernet header
-        htons(ETH_P_ALL)    // get all protocols (ethernet types)
+        htons(ETH_P_IP)    // get only IPv4
     );
 
     if (fd < 0) {
@@ -58,7 +59,7 @@ int capture_packets(const char *interface_name) {
     struct sockaddr_ll addr;
     memset(&addr, 0, sizeof(addr));
     addr.sll_family = AF_PACKET;
-    addr.sll_protocol = htons(ETH_P_ALL);
+    addr.sll_protocol = htons(ETH_P_IP);
     addr.sll_ifindex = (int)ifindex;
 
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {

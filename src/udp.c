@@ -6,6 +6,7 @@
 int parse_udp(const uint8_t *buffer, size_t length, UDPHeader *header){
     // Validation checks
     if (buffer == NULL || header == NULL || length < UDP_HEADER_SIZE) {
+        puts("Invalid input to parse_udp");
         return -1;
     }
 
