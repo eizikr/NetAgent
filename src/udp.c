@@ -16,5 +16,15 @@ int parse_udp(const uint8_t *buffer, size_t length, UDPHeader *header){
     header->length = ((uint16_t)buffer[4] << 8) | buffer[5];
     header->checksum = ((uint16_t)buffer[6] << 8) | buffer[7];
 
+    if (header->length < UDP_HEADER_SIZE) {
+        fprintf(stderr, "UDP length is smaller than UDP header\n");
+        return -1;
+    }
+
+    if (header->length > length) {
+        fprintf(stderr, "UDP length exceeds buffer length\n");
+        return -1;
+    }
+
     return 0;
 }

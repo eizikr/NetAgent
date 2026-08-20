@@ -18,6 +18,8 @@
 #include <stdio.h>
 
 static volatile sig_atomic_t stop_requested = 0;
+
+static int attach_udp_port_filter(int fd, uint16_t port);
 static void handle_sigint(int signo)
 {
     (void)signo;
@@ -25,71 +27,7 @@ static void handle_sigint(int signo)
 }
 
 
-int capture_packets(const char *interface_name) {
-
-    struct sock_filter filter[] = {
-        BPF_STMT(       //  Get the  EtherType from Ethernet header
-            BPF_LD | BPF_H | BPF_ABS,
-            12
-        ),
-
-        BPF_JUMP(
-            BPF_JMP | BPF_JEQ | BPF_K,
-            ETH_P_IP,   //  is IPv4?
-            0,          // Yes - forward to next instruction
-            8           // NO  - DROP (Jumps 8 steps from next instruction)
-        ),
-
-        BPF_STMT(       // Get the Protocol from IPv4 header
-            BPF_LD | BPF_B | BPF_ABS,
-            23
-        ),
-
-        BPF_JUMP(       
-            BPF_JMP | BPF_JEQ | BPF_K,
-            IPPROTO_UDP,//  is UDP?
-            0,          // Yes - forward to next instruction
-            6           // No  - DROP
-        ),
-
-        BPF_STMT(       // Get the IHL from IPv4 header dynamically 
-            BPF_LDX | BPF_B | BPF_MSH,
-            14
-        ),
-        BPF_STMT(       // Get the src Port from UDP header
-            BPF_LD | BPF_H | BPF_IND,
-            14
-        ),
-
-        BPF_JUMP(
-            BPF_JMP | BPF_JEQ | BPF_K,
-            20481,      //  is Source Port == 20481?
-            2,          // Yes - ACCEPT
-            0           // No  - Check dst port
-        ),
-
-        BPF_STMT(       // Get the dst Port from UDP header
-            BPF_LD | BPF_H | BPF_IND,
-            16
-        ),
-
-        BPF_JUMP(
-            BPF_JMP | BPF_JEQ | BPF_K,
-            20481,      //  is Destination Port == 20481?
-            0,          // Yes - ACCEPT
-            1           // No  - DROP
-        ),
-
-        BPF_STMT(       // ACCEPT   
-            BPF_RET | BPF_K,
-            0xFFFFFFFF
-        ),
-
-        BPF_STMT(       // DROP
-            BPF_RET | BPF_K,
-            0
-        )
-    };
+int capture_packets(const char *interface_name , uint16_t port) {
 
     uint8_t buffer[PACKET_BUFFER_SIZE];
 
@@ -149,21 +87,11 @@ int capture_packets(const char *interface_name) {
     }
 
 
-    struct sock_fprog filter_program = {
-    .len = sizeof(filter) / sizeof(filter[0]),
-    .filter = filter
-    };
-
-    if (setsockopt(     // Take my filter and connect it to the socket
-            fd,
-            SOL_SOCKET,
-            SO_ATTACH_FILTER,
-            &filter_program,
-            sizeof(filter_program)) < 0) {
-
-        perror("setsockopt(SO_ATTACH_FILTER)");
+    if (attach_udp_port_filter(fd, port) != 0) {
+        puts("Failed to attach BPF filter");
         goto error_handling;
     }
+
 
     puts("Classic BPF UDP filter attached");
 
@@ -203,4 +131,92 @@ error_handling:
     close(fd);
     return -1;
 
+}
+
+
+
+static int attach_udp_port_filter(int fd, uint16_t port)
+{
+        struct sock_filter filter[] = {
+        BPF_STMT(       //  Get the  EtherType from Ethernet header
+            BPF_LD | BPF_H | BPF_ABS,
+            12
+        ),
+
+        BPF_JUMP(
+            BPF_JMP | BPF_JEQ | BPF_K,
+            ETH_P_IP,   //  is IPv4?
+            0,          // Yes - forward to next instruction
+            8           // NO  - DROP (Jumps 8 steps from next instruction)
+        ),
+
+        BPF_STMT(       // Get the Protocol from IPv4 header
+            BPF_LD | BPF_B | BPF_ABS,
+            23
+        ),
+
+        BPF_JUMP(       
+            BPF_JMP | BPF_JEQ | BPF_K,
+            IPPROTO_UDP,//  is UDP?
+            0,          // Yes - forward to next instruction
+            6           // No  - DROP
+        ),
+
+        BPF_STMT(       // Get the IHL from IPv4 header dynamically 
+            BPF_LDX | BPF_B | BPF_MSH,
+            14
+        ),
+        BPF_STMT(       // Get the src Port from UDP header
+            BPF_LD | BPF_H | BPF_IND,
+            14
+        ),
+
+        BPF_JUMP(
+            BPF_JMP | BPF_JEQ | BPF_K,
+            port,      //  is Source Port == port?
+            2,          // Yes - ACCEPT
+            0           // No  - Check dst port
+        ),
+
+        BPF_STMT(       // Get the dst Port from UDP header
+            BPF_LD | BPF_H | BPF_IND,
+            16
+        ),
+
+        BPF_JUMP(
+            BPF_JMP | BPF_JEQ | BPF_K,
+            port,      //  is Destination Port == port?
+            0,          // Yes - ACCEPT
+            1           // No  - DROP
+        ),
+
+        BPF_STMT(       // ACCEPT   
+            BPF_RET | BPF_K,
+            0xFFFFFFFF
+        ),
+
+        BPF_STMT(       // DROP
+            BPF_RET | BPF_K,
+            0
+        )
+    };
+
+    struct sock_fprog program = {
+        .len = sizeof(filter) / sizeof(filter[0]),
+        .filter = filter
+    };
+
+    if (setsockopt(
+            fd,
+            SOL_SOCKET,
+            SO_ATTACH_FILTER,
+            &program,
+            sizeof(program)) < 0) {
+        perror("setsockopt(SO_ATTACH_FILTER)");
+        return -1;
+    }
+
+    printf("Classic BPF filter attached for UDP port %u\n", port);
+
+    return 0;
 }

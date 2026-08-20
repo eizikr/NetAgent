@@ -1,18 +1,30 @@
 #include <stdio.h>
-#include "netagent/packet.h"
+#include <stdlib.h>
+#include <stdint.h>
+
 #include "netagent/capture.h"
 
 int main(int argc, char *argv[]){
 
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <interface>\n", argv[0]);
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <interface> <udp-port>\n", argv[0]);
         return 1;
     }
-	char* interface_name = argv[1];
-	puts("NetAgent v0.1.0");
-	printf("Listening on interface: %s\n", interface_name);
 
-	return capture_packets(interface_name);
+	const char* interface_name = argv[1];
+	unsigned long port_value = strtoul(argv[2], NULL, 10);
+
+	if (port_value > 65535) {
+        fprintf(stderr, "Invalid UDP port\n");
+        return 1;
+    }
+
+	uint16_t port = (uint16_t)port_value;
+
+	puts("NetAgent v0.1.0");
+	printf("Listening on %s, UDP port %u\n", interface_name, port);
+
+	return capture_packets(interface_name, port);
 
 }
 

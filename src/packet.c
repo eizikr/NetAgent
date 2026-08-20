@@ -173,10 +173,6 @@ static int dispatch_ipv4_protocol(uint8_t protocol, const uint8_t *payload, size
             if (udp_header.length > payload_length) {
                 return -1;
             }
-            if (udp_header.src_port != 20481 &&
-                udp_header.dst_port != 20481) {
-                return 0;
-            }
             
             printf("UDP %u -> %u\n",
                 udp_header.src_port,
@@ -208,7 +204,7 @@ static int dispatch_udp_payload(
 {
     (void)payload;
     switch (dst_port) {
-    case 20481:
+    case 20481:{
         TWAMPSenderPacket twamp_packet;
         int result = parse_twamp_sender(payload, payload_length, &twamp_packet);
         if (result != 0) {
@@ -222,7 +218,7 @@ static int dispatch_udp_payload(
         printf("Timestamp Fraction:  0x%08x\n", twamp_packet.timestamp_fraction);
         printf("Error Estimate:      0x%04x\n", twamp_packet.error_estimate);
         break;
-
+    }
     default:
         printf("Generic UDP traffic on port %u\n", dst_port);
         break;
