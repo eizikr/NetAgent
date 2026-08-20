@@ -28,14 +28,47 @@ static void handle_sigint(int signo)
 int capture_packets(const char *interface_name) {
 
     struct sock_filter filter[] = {
-        BPF_STMT(BPF_LD  | BPF_B | BPF_ABS, 23),
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, IPPROTO_UDP, 0, 1), //IPPROTO_UDP = 17
-        BPF_STMT(BPF_RET | BPF_K, 0xFFFFFFFF),
-        BPF_STMT(BPF_RET | BPF_K, 0),
+
+        /* [0] Load Ethernet EtherType */
+        BPF_STMT(
+            BPF_LD | BPF_H | BPF_ABS,
+            12
+        ),
+
+        /* [1] IPv4? NO -> DROP [5] */
+        BPF_JUMP(
+            BPF_JMP | BPF_JEQ | BPF_K,
+            ETH_P_IP,
+            0,
+            3
+        ),
+
+        /* [2] Load IPv4 Protocol */
+        BPF_STMT(
+            BPF_LD | BPF_B | BPF_ABS,
+            23
+        ),
+
+        /* [3] UDP? NO -> DROP [5] */
+        BPF_JUMP(
+            BPF_JMP | BPF_JEQ | BPF_K,
+            IPPROTO_UDP,
+            0,
+            1
+        ),
+
+        /* [4] ACCEPT */
+        BPF_STMT(
+            BPF_RET | BPF_K,
+            0xFFFFFFFF
+        ),
+
+        /* [5] DROP */
+        BPF_STMT(
+            BPF_RET | BPF_K,
+            0
+        )
     };
-
-
-
 
     uint8_t buffer[PACKET_BUFFER_SIZE];
 
@@ -47,7 +80,7 @@ int capture_packets(const char *interface_name) {
     int fd = socket(
         AF_PACKET,          // use layer 2 (Ethernet) socket
         SOCK_RAW,           // work with raw frames include ethernet header
-        htons(ETH_P_IP)    // get only IPv4
+        htons(ETH_P_ALL)    // get only IPv4
     );
 
     if (fd < 0) {
@@ -71,7 +104,7 @@ int capture_packets(const char *interface_name) {
     struct sockaddr_ll addr;
     memset(&addr, 0, sizeof(addr));
     addr.sll_family = AF_PACKET;
-    addr.sll_protocol = htons(ETH_P_IP);
+    addr.sll_protocol = htons(ETH_P_ALL);
     addr.sll_ifindex = (int)ifindex;
 
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
