@@ -28,43 +28,64 @@ static void handle_sigint(int signo)
 int capture_packets(const char *interface_name) {
 
     struct sock_filter filter[] = {
-
-        /* [0] Load Ethernet EtherType */
-        BPF_STMT(
+        BPF_STMT(       //  Get the  EtherType from Ethernet header
             BPF_LD | BPF_H | BPF_ABS,
             12
         ),
 
-        /* [1] IPv4? NO -> DROP [5] */
         BPF_JUMP(
             BPF_JMP | BPF_JEQ | BPF_K,
-            ETH_P_IP,
-            0,
-            3
+            ETH_P_IP,   //  is IPv4?
+            0,          // Yes - forward to next instruction
+            8           // NO  - DROP (Jumps 8 steps from next instruction)
         ),
 
-        /* [2] Load IPv4 Protocol */
-        BPF_STMT(
+        BPF_STMT(       // Get the Protocol from IPv4 header
             BPF_LD | BPF_B | BPF_ABS,
             23
         ),
 
-        /* [3] UDP? NO -> DROP [5] */
-        BPF_JUMP(
+        BPF_JUMP(       
             BPF_JMP | BPF_JEQ | BPF_K,
-            IPPROTO_UDP,
-            0,
-            1
+            IPPROTO_UDP,//  is UDP?
+            0,          // Yes - forward to next instruction
+            6           // No  - DROP
         ),
 
-        /* [4] ACCEPT */
-        BPF_STMT(
+        BPF_STMT(       // Get the IHL from IPv4 header dynamically 
+            BPF_LDX | BPF_B | BPF_MSH,
+            14
+        ),
+        BPF_STMT(       // Get the src Port from UDP header
+            BPF_LD | BPF_H | BPF_IND,
+            14
+        ),
+
+        BPF_JUMP(
+            BPF_JMP | BPF_JEQ | BPF_K,
+            20481,      //  is Source Port == 20481?
+            2,          // Yes - ACCEPT
+            0           // No  - Check dst port
+        ),
+
+        BPF_STMT(       // Get the dst Port from UDP header
+            BPF_LD | BPF_H | BPF_IND,
+            16
+        ),
+
+        BPF_JUMP(
+            BPF_JMP | BPF_JEQ | BPF_K,
+            20481,      //  is Destination Port == 20481?
+            0,          // Yes - ACCEPT
+            1           // No  - DROP
+        ),
+
+        BPF_STMT(       // ACCEPT   
             BPF_RET | BPF_K,
             0xFFFFFFFF
         ),
 
-        /* [5] DROP */
-        BPF_STMT(
+        BPF_STMT(       // DROP
             BPF_RET | BPF_K,
             0
         )
