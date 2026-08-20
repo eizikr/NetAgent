@@ -28,8 +28,6 @@ int parse_ipv4(const uint8_t *buffer, size_t length, IPv4Header *header){
 		return -1;
 	}
 
-
-
 	header->total_length = ((uint16_t)buffer[2] << 8) | buffer[3];
 	if (header->total_length > length) {
 		puts("IPv4 total length exceeds buffer length");
@@ -40,7 +38,8 @@ int parse_ipv4(const uint8_t *buffer, size_t length, IPv4Header *header){
 		puts("IPv4 total length is less than header length");
 		return -1;
 	}
-	
+
+	// parsing the remaining fields of the IPv4 header
 	header->ttl = buffer[8];
 	header->protocol = buffer[9];
 	header->src_addr =

@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE
 
 #include "netagent/capture.h"
 #include "netagent/packet.h"
@@ -25,6 +26,17 @@ static void handle_sigint(int signo)
 
 
 int capture_packets(const char *interface_name) {
+
+    struct sock_filter filter[] = {
+        BPF_STMT(BPF_LD  | BPF_B | BPF_ABS, 23),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, IPPROTO_UDP, 0, 1), //IPPROTO_UDP = 17
+        BPF_STMT(BPF_RET | BPF_K, 0xFFFFFFFF),
+        BPF_STMT(BPF_RET | BPF_K, 0),
+    };
+
+
+
+
     uint8_t buffer[PACKET_BUFFER_SIZE];
 
     if (interface_name == NULL) {
@@ -81,6 +93,25 @@ int capture_packets(const char *interface_name) {
         perror("sigaction");
         goto error_handling;
     }
+
+
+    struct sock_fprog filter_program = {
+    .len = sizeof(filter) / sizeof(filter[0]),
+    .filter = filter
+    };
+
+    if (setsockopt(     // Take my filter and connect it to the socket
+            fd,
+            SOL_SOCKET,
+            SO_ATTACH_FILTER,
+            &filter_program,
+            sizeof(filter_program)) < 0) {
+
+        perror("setsockopt(SO_ATTACH_FILTER)");
+        goto error_handling;
+    }
+
+    puts("Classic BPF UDP filter attached");
 
     while(!stop_requested){
         
