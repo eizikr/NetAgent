@@ -3,6 +3,7 @@
 
 #include "netagent/capture.h"
 #include "netagent/packet.h"
+#include "netagent/twamp.h"
 
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
@@ -115,7 +116,14 @@ int capture_packets(const char *interface_name , uint16_t port) {
             goto error_handling;
         }
 
-        int result = process_packet(buffer, (size_t)received_length);
+        NtpTimestamp receive_timestamp;
+
+        if (ntp_timestamp_now(&receive_timestamp) != 0) {
+            fprintf(stderr, "Failed to capture T2 timestamp\n");
+            continue;
+        }
+
+        int result = process_packet(buffer, (size_t)received_length, &receive_timestamp);
         if (result < 0) {
             fprintf(stderr, "Packet processing failed: %d\n", result);
         }

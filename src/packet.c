@@ -21,7 +21,7 @@ static int dispatch_udp_payload(
     size_t payload_length
 );
 
-int process_packet(const uint8_t *packet, size_t length){
+int process_packet(const uint8_t *packet, size_t length, const NtpTimestamp *receive_timestamp){
     EthernetHeader header;
 	IPv4Header ipv4_header;
 
@@ -33,6 +33,15 @@ int process_packet(const uint8_t *packet, size_t length){
         return -1;
     }
 
+    if (receive_timestamp == NULL) {
+        return -1;
+    }
+
+    printf(
+        "T2: %u.%08x\n",
+        receive_timestamp->seconds,
+        receive_timestamp->fraction
+    );
 	//	PARSE MAC HEADER
 	int result = parse_ethernet(
 		packet,
