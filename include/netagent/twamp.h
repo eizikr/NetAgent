@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define TWAMP_HEADER_SIZE 14
+#define TWAMP_SENDER_MIN_SIZE 14
 
 typedef struct { // 64-bit NTP timestamp ( 4 bytes seconds + 4 bytes fraction )
     uint32_t sequence_number;       // 4 bytes

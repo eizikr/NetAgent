@@ -7,7 +7,17 @@ int parse_twamp_sender(
     size_t length,
     TWAMPSenderPacket *packet)
 {
-    if (buffer == NULL || packet == NULL || length < TWAMP_HEADER_SIZE) {
+
+//     Offset    Size    Field
+//  ────────────────────────────────────
+//      0         4       Sequence Number
+//      4         4       Timestamp Seconds
+//      8         4       Timestamp Fraction
+//      12        2       Error Estimate
+//  ────────────────────────────────────
+//      Total     14 bytes
+
+    if (buffer == NULL || packet == NULL || length < TWAMP_SENDER_MIN_SIZE) {
         puts("Invalid input to parse_twamp_sender");
         return -1;
     }
