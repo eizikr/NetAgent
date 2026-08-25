@@ -1,3 +1,4 @@
+#define NTP_UNIX_EPOCH_OFFSET 2208988800UL
 #define _POSIX_C_SOURCE 200809L
 
 #include "netagent/twamp.h"
@@ -5,6 +6,30 @@
 #include <stdio.h>
 #include <time.h>
 
+
+int timespec_to_ntp(
+    const struct timespec *ts,
+    NtpTimestamp *timestamp)
+{
+    if (ts == NULL || timestamp == NULL) {
+        return -1;
+    }
+
+    if (ts->tv_sec < 0 ||
+        ts->tv_nsec < 0 ||
+        ts->tv_nsec >= 1000000000L) {
+        return -1;
+    }
+
+    timestamp->seconds =
+        (uint32_t)ts->tv_sec + NTP_UNIX_EPOCH_OFFSET;
+
+    timestamp->fraction =
+        (uint32_t)(((uint64_t)ts->tv_nsec << 32) /
+                   1000000000ULL);  // convert nanoseconds to NTP fraction
+
+    return 0;
+}
 
 int parse_twamp_sender(
     const uint8_t *buffer,

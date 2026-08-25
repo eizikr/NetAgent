@@ -2,6 +2,7 @@
 #define NETAGENT_TWAMP_H
 
 #define _POSIX_C_SOURCE 200809L
+#include <time.h>
 
 #include <stddef.h>
 #include <stdint.h>
@@ -70,6 +71,11 @@ int serialize_twamp_reflector(
 
 int set_twamp_transmit_timestamp(
     TWAMPReflectorPacket *response
+);
+
+int timespec_to_ntp(
+    const struct timespec *ts,
+    NtpTimestamp *timestamp
 );
 
 #endif

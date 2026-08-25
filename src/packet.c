@@ -46,11 +46,6 @@ int process_packet(const uint8_t *packet, size_t length, const NtpTimestamp *rec
         return -1;
     }
 
-    printf(
-        "T2: %u.%08x\n",
-        receive_timestamp->seconds,
-        receive_timestamp->fraction
-    );
 	//	PARSE MAC HEADER
 	int result = parse_ethernet(
 		packet,

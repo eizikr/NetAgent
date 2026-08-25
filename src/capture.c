@@ -18,6 +18,8 @@
 #include <signal.h>
 #include <errno.h>
 #include <stdio.h>
+#include <time.h>
+#include <sys/uio.h>
 
 static volatile sig_atomic_t stop_requested = 0;
 
@@ -33,6 +35,7 @@ int capture_packets(const char *interface_name , uint16_t port) {
 
     uint8_t buffer[PACKET_BUFFER_SIZE];
     UdpTxSocket tx = { .fd = -1, .local_port = 0 };
+    int enable_timestamp = 1;
 
     if (interface_name == NULL) {
         fprintf(stderr, "Interface name is NULL\n");
@@ -42,7 +45,7 @@ int capture_packets(const char *interface_name , uint16_t port) {
     int fd = socket(
         AF_PACKET,          // use layer 2 (Ethernet) socket
         SOCK_RAW,           // work with raw frames include ethernet header
-        htons(ETH_P_ALL)    // get only IPv4
+        htons(ETH_P_ALL)    // receive all Ethernet protocols; BPF filters relevant traffic
     );
 
     if (fd < 0) {
@@ -54,7 +57,18 @@ int capture_packets(const char *interface_name , uint16_t port) {
         return -1;
     }
 
+    if (setsockopt(
+            fd,
+            SOL_SOCKET,
+            SO_TIMESTAMPNS,
+            &enable_timestamp,
+            sizeof(enable_timestamp)) < 0) {
 
+        perror("setsockopt(SO_TIMESTAMPNS)");
+        goto error_handling;
+    }
+
+    puts("Kernel RX timestamping enabled");
 
     unsigned int ifindex = if_nametoindex(interface_name); // convert "ens33" to "2"
 
@@ -103,28 +117,69 @@ int capture_packets(const char *interface_name , uint16_t port) {
 
     while(!stop_requested){
         
-        ssize_t received_length = recvfrom(
-            /*Read N bytes into BUF through socket FD.*/
+        struct iovec iov;                   // describe where to store the received data
+        iov.iov_base = buffer;              // this is the buffer
+        iov.iov_len = sizeof(buffer);       // this is his size
+
+        char control[CMSG_SPACE(sizeof(struct timespec))];
+        memset(control, 0, sizeof(control));
+
+        struct msghdr msg;
+        memset(&msg, 0, sizeof(msg));
+
+        msg.msg_iov = &iov;
+        msg.msg_iovlen = 1;
+
+        msg.msg_control = control;
+        msg.msg_controllen = sizeof(control);
+        ssize_t received_length = recvmsg(
             fd,
-            buffer,
-            PACKET_BUFFER_SIZE,
-            0,
-            NULL,
-            NULL
+            &msg,
+            0
         );
+
+        if (msg.msg_flags & MSG_CTRUNC) {
+            fprintf(stderr, "Control data truncated\n");
+            continue;
+        }
 
         if (received_length < 0) {
             if (errno == EINTR && stop_requested) {
                 break;
             }
-            perror("recvfrom");
+
+            perror("recvmsg");
             goto error_handling;
+        }
+
+        struct timespec *kernel_timestamp = NULL;
+
+        for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+            cmsg != NULL;
+            cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+
+            if (cmsg->cmsg_level == SOL_SOCKET &&
+                cmsg->cmsg_type == SCM_TIMESTAMPNS) {
+
+                kernel_timestamp =
+                    (struct timespec *)CMSG_DATA(cmsg);
+
+                break;
+            }
         }
 
         NtpTimestamp receive_timestamp;
 
-        if (ntp_timestamp_now(&receive_timestamp) != 0) {
-            fprintf(stderr, "Failed to capture T2 timestamp\n");
+        if (kernel_timestamp == NULL) {
+            fprintf(stderr, "Missing kernel RX timestamp\n");
+            continue;
+        }
+
+        if (timespec_to_ntp(
+                kernel_timestamp,
+                &receive_timestamp) != 0) {
+
+            fprintf(stderr, "Failed to convert RX timestamp to NTP\n");
             continue;
         }
 
@@ -156,62 +211,44 @@ error_handling:
 static int attach_udp_port_filter(int fd, uint16_t port)
 {
         struct sock_filter filter[] = {
-
-        /* [0] Load Ethernet EtherType */
         BPF_STMT(
             BPF_LD | BPF_H | BPF_ABS,
             12
         ),
-
-        /* [1] Not IPv4 -> DROP [8] */
         BPF_JUMP(
             BPF_JMP | BPF_JEQ | BPF_K,
             ETH_P_IP,
             0,
             6
         ),
-
-        /* [2] Load IPv4 Protocol */
         BPF_STMT(
             BPF_LD | BPF_B | BPF_ABS,
             23
         ),
-
-        /* [3] Not UDP -> DROP [8] */
         BPF_JUMP(
             BPF_JMP | BPF_JEQ | BPF_K,
             IPPROTO_UDP,
             0,
             4
         ),
-
-        /* [4] X = IPv4 header length (IHL * 4) */
         BPF_STMT(
             BPF_LDX | BPF_B | BPF_MSH,
             14
         ),
-
-        /* [5] Load UDP Destination Port */
         BPF_STMT(
             BPF_LD | BPF_H | BPF_IND,
             16
         ),
-
-        /* [6] dst port == configured port? */
         BPF_JUMP(
             BPF_JMP | BPF_JEQ | BPF_K,
             port,
             0,
             1
         ),
-
-        /* [7] ACCEPT */
         BPF_STMT(
             BPF_RET | BPF_K,
             0xFFFFFFFF
         ),
-
-        /* [8] DROP */
         BPF_STMT(
             BPF_RET | BPF_K,
             0
