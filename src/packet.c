@@ -8,20 +8,29 @@
 #include "netagent/ipv4.h"
 #include "netagent/icmp.h"
 #include "netagent/udp.h"
+#include "netagent/tx.h"
 
 static int dispatch_ipv4_protocol(
     uint8_t protocol,
+    uint8_t sender_ttl,
+    UdpEndpoint sender,
+    const NtpTimestamp *receive_timestamp,
     const uint8_t *payload,
-    size_t payload_length
+    size_t payload_length,
+    const UdpTxSocket *tx
 );
 
 static int dispatch_udp_payload(
+    const UdpEndpoint *sender,
+    uint8_t sender_ttl,
     uint16_t dst_port,
     const uint8_t *payload,
-    size_t payload_length
+    size_t payload_length,
+    const NtpTimestamp *receive_timestamp,
+    const UdpTxSocket *tx
 );
 
-int process_packet(const uint8_t *packet, size_t length, const NtpTimestamp *receive_timestamp){
+int process_packet(const uint8_t *packet, size_t length, const NtpTimestamp *receive_timestamp, const UdpTxSocket *tx){
     EthernetHeader header;
 	IPv4Header ipv4_header;
 
@@ -93,26 +102,6 @@ int process_packet(const uint8_t *packet, size_t length, const NtpTimestamp *rec
     const uint8_t   *payload =          ipv4_buffer + ipv4_header_length;
     size_t           payload_length =   ipv4_length - ipv4_header_length;
 
-	// puts("MAC Header:");
-
-    // printf("Destination MAC:     %02x:%02x:%02x:%02x:%02x:%02x\n",
-    //     header.dst_mac[0],
-    //     header.dst_mac[1],
-    //     header.dst_mac[2],
-    //     header.dst_mac[3],
-    //     header.dst_mac[4],
-    //     header.dst_mac[5]);
-
-    // printf("Source MAC:          %02x:%02x:%02x:%02x:%02x:%02x\n",
-    //     header.src_mac[0],
-    //     header.src_mac[1],
-    //     header.src_mac[2],
-    //     header.src_mac[3],
-    //     header.src_mac[4],
-    //     header.src_mac[5]);
-
-    // printf("EtherType:           0x%04x\n", header.ethertype);
-
 	char src_ip[INET_ADDRSTRLEN];
 	char dst_ip[INET_ADDRSTRLEN];
 
@@ -122,20 +111,19 @@ int process_packet(const uint8_t *packet, size_t length, const NtpTimestamp *rec
 	inet_ntop(AF_INET, &src_network, src_ip, sizeof(src_ip));
 	inet_ntop(AF_INET, &dst_network, dst_ip, sizeof(dst_ip));
 
-	// puts("\nIPv4 Header:");
-	// printf("Version:	     %02x\n",ipv4_header.version);
-    // printf("ihl:                 %02x\n",ipv4_header.ihl);
-	// printf("total_length:        0x%04x\n",ipv4_header.total_length);
-	// printf("Source IP:           %s\n", src_ip);
-	// printf("Destination IP:      %s\n", dst_ip);
+    uint32_t src_ip_addr = ipv4_header.src_addr;
+    uint16_t src_port = ((uint16_t)payload[0] << 8) | payload[1];
+    UdpEndpoint sender = {
+        .ip = src_ip_addr,
+        .port = src_port
+    };
 
-    
-    int dispatch_result = dispatch_ipv4_protocol(ipv4_header.protocol, payload, payload_length);
+    int dispatch_result = dispatch_ipv4_protocol(ipv4_header.protocol, ipv4_header.ttl, sender, receive_timestamp, payload, payload_length, tx);
 
     return dispatch_result;
 }
 
-static int dispatch_ipv4_protocol(uint8_t protocol, const uint8_t *payload, size_t payload_length){
+static int dispatch_ipv4_protocol(uint8_t protocol, uint8_t sender_ttl, UdpEndpoint sender, const NtpTimestamp *receive_timestamp, const uint8_t *payload, size_t payload_length,   const UdpTxSocket *tx){
     switch (protocol) {
         case IP_PROTO_ICMP: {
             ICMPHeader icmp_header;
@@ -171,7 +159,7 @@ static int dispatch_ipv4_protocol(uint8_t protocol, const uint8_t *payload, size
             UDPHeader udp_header;
 
             int result = parse_udp(payload, payload_length, &udp_header);
-            
+
             if (result != 0) {
                 fprintf(stderr, "Failed to parse UDP header\n");
                 return result;
@@ -192,9 +180,13 @@ static int dispatch_ipv4_protocol(uint8_t protocol, const uint8_t *payload, size
             const uint8_t *udp_payload = payload + UDP_HEADER_SIZE;
             
             return dispatch_udp_payload(
+                &sender,
+                sender_ttl,
                 udp_header.dst_port,
                 udp_payload,
-                udp_payload_length
+                udp_payload_length,
+                receive_timestamp,
+                tx
             );
         }
 
@@ -207,26 +199,69 @@ static int dispatch_ipv4_protocol(uint8_t protocol, const uint8_t *payload, size
 }
 
 static int dispatch_udp_payload(
+    const UdpEndpoint *sender,
+    uint8_t sender_ttl,
     uint16_t dst_port,
     const uint8_t *payload,
-    size_t payload_length)
+    size_t payload_length,
+    const NtpTimestamp *receive_timestamp,
+    const UdpTxSocket *tx)
 {
-    (void)payload;
     switch (dst_port) {
     case 20481:{
-        TWAMPSenderPacket twamp_packet;
-        int result = parse_twamp_sender(payload, payload_length, &twamp_packet);
+        TWAMPSenderPacket sender_packet;
+        TWAMPReflectorPacket response;
+        uint8_t tx_buffer[TWAMP_REFLECTOR_FIXED_SIZE];
+
+
+        int result = parse_twamp_sender(
+            payload, 
+            payload_length, 
+            &sender_packet
+        );
+
         if (result != 0) {
             fprintf(stderr, "Failed to parse TWAMP sender packet\n");
             return result;
         }
+        response.sender_ttl = sender_ttl;
+        result = build_twamp_reflector_response(
+            &sender_packet,
+            receive_timestamp,
+            &response
+        );
 
-        puts("\nTWAMP Sender Packet:");
-        printf("Sequence Number:     %u\n", twamp_packet.sequence_number);
-        printf("Timestamp Seconds:   0x%08x\n", twamp_packet.timestamp_seconds);
-        printf("Timestamp Fraction:  0x%08x\n", twamp_packet.timestamp_fraction);
-        printf("Error Estimate:      0x%04x\n", twamp_packet.error_estimate);
-        break;
+        if (result != 0) {
+            fprintf(stderr, "Failed to build TWAMP reflector response\n");
+            return result;
+        }
+
+        NtpTimestamp t3;
+
+        if (ntp_timestamp_now(&t3) != 0) {
+            return -1;
+        }
+
+        response.timestamp_seconds = t3.seconds;
+        response.timestamp_fraction = t3.fraction;
+
+        result = serialize_twamp_reflector(
+            &response,
+            tx_buffer,
+            sizeof(tx_buffer)
+        );
+
+        if (result != 0) {
+            return result;
+        }
+
+        return udp_tx_send(
+            tx,
+            sender,
+            tx_buffer,
+            sizeof(tx_buffer)
+        );
+
     }
     default:
         printf("Generic UDP traffic on port %u\n", dst_port);

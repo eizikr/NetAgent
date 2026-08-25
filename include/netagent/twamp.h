@@ -11,6 +11,7 @@
 #define NTP_UNIX_EPOCH_OFFSET 2208988800ULL
 #define NSEC_PER_SEC          1000000000ULL
 
+
 typedef struct { // 64-bit NTP timestamp ( 4 bytes seconds + 4 bytes fraction )
     uint32_t sequence_number;       // 4 bytes
     uint32_t timestamp_seconds;     // 4 bytes

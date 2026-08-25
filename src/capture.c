@@ -4,6 +4,7 @@
 #include "netagent/capture.h"
 #include "netagent/packet.h"
 #include "netagent/twamp.h"
+#include "netagent/tx.h"
 
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
@@ -31,6 +32,7 @@ static void handle_sigint(int signo)
 int capture_packets(const char *interface_name , uint16_t port) {
 
     uint8_t buffer[PACKET_BUFFER_SIZE];
+    UdpTxSocket tx = { .fd = -1, .local_port = 0 };
 
     if (interface_name == NULL) {
         fprintf(stderr, "Interface name is NULL\n");
@@ -93,8 +95,11 @@ int capture_packets(const char *interface_name , uint16_t port) {
         goto error_handling;
     }
 
-
-    puts("Classic BPF UDP filter attached");
+    if (udp_tx_open(&tx, port) != 0) {
+        fprintf(stderr, "Failed to open UDP TX socket\n");
+        goto error_handling;
+    }
+    printf("UDP TX socket bound to port %u\n", tx.local_port);
 
     while(!stop_requested){
         
@@ -123,7 +128,7 @@ int capture_packets(const char *interface_name , uint16_t port) {
             continue;
         }
 
-        int result = process_packet(buffer, (size_t)received_length, &receive_timestamp);
+        int result = process_packet(buffer, (size_t)received_length, &receive_timestamp, &tx);
         if (result < 0) {
             fprintf(stderr, "Packet processing failed: %d\n", result);
         }
@@ -132,11 +137,16 @@ int capture_packets(const char *interface_name , uint16_t port) {
 
 
     puts("\nStopping NetAgent...");
+    udp_tx_close(&tx);
     close(fd);
     return 0;
 
 error_handling:
-    close(fd);
+    udp_tx_close(&tx);
+
+    if (fd >= 0) {
+        close(fd);
+    }
     return -1;
 
 }
@@ -146,64 +156,63 @@ error_handling:
 static int attach_udp_port_filter(int fd, uint16_t port)
 {
         struct sock_filter filter[] = {
-        BPF_STMT(       //  Get the  EtherType from Ethernet header
+
+        /* [0] Load Ethernet EtherType */
+        BPF_STMT(
             BPF_LD | BPF_H | BPF_ABS,
             12
         ),
 
+        /* [1] Not IPv4 -> DROP [8] */
         BPF_JUMP(
             BPF_JMP | BPF_JEQ | BPF_K,
-            ETH_P_IP,   //  is IPv4?
-            0,          // Yes - forward to next instruction
-            8           // NO  - DROP (Jumps 8 steps from next instruction)
+            ETH_P_IP,
+            0,
+            6
         ),
 
-        BPF_STMT(       // Get the Protocol from IPv4 header
+        /* [2] Load IPv4 Protocol */
+        BPF_STMT(
             BPF_LD | BPF_B | BPF_ABS,
             23
         ),
 
-        BPF_JUMP(       
+        /* [3] Not UDP -> DROP [8] */
+        BPF_JUMP(
             BPF_JMP | BPF_JEQ | BPF_K,
-            IPPROTO_UDP,//  is UDP?
-            0,          // Yes - forward to next instruction
-            6           // No  - DROP
+            IPPROTO_UDP,
+            0,
+            4
         ),
 
-        BPF_STMT(       // Get the IHL from IPv4 header dynamically 
+        /* [4] X = IPv4 header length (IHL * 4) */
+        BPF_STMT(
             BPF_LDX | BPF_B | BPF_MSH,
             14
         ),
-        BPF_STMT(       // Get the src Port from UDP header
-            BPF_LD | BPF_H | BPF_IND,
-            14
-        ),
 
-        BPF_JUMP(
-            BPF_JMP | BPF_JEQ | BPF_K,
-            port,      //  is Source Port == port?
-            2,          // Yes - ACCEPT
-            0           // No  - Check dst port
-        ),
-
-        BPF_STMT(       // Get the dst Port from UDP header
+        /* [5] Load UDP Destination Port */
+        BPF_STMT(
             BPF_LD | BPF_H | BPF_IND,
             16
         ),
 
+        /* [6] dst port == configured port? */
         BPF_JUMP(
             BPF_JMP | BPF_JEQ | BPF_K,
-            port,      //  is Destination Port == port?
-            0,          // Yes - ACCEPT
-            1           // No  - DROP
+            port,
+            0,
+            1
         ),
 
-        BPF_STMT(       // ACCEPT   
+        /* [7] ACCEPT */
+        BPF_STMT(
             BPF_RET | BPF_K,
             0xFFFFFFFF
         ),
 
-        BPF_STMT(       // DROP
+        /* [8] DROP */
+        BPF_STMT(
             BPF_RET | BPF_K,
             0
         )
@@ -224,7 +233,7 @@ static int attach_udp_port_filter(int fd, uint16_t port)
         return -1;
     }
 
-    printf("Classic BPF filter attached for UDP port %u\n", port);
-
     return 0;
 }
+
+
