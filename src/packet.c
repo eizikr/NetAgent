@@ -13,7 +13,7 @@
 static int dispatch_ipv4_protocol(
     uint8_t protocol,
     uint8_t sender_ttl,
-    UdpEndpoint sender,
+    uint32_t sender_ip,
     const NtpTimestamp *receive_timestamp,
     const uint8_t *payload,
     size_t payload_length,
@@ -108,22 +108,24 @@ int process_packet(const uint8_t *packet, size_t length, const NtpTimestamp *rec
 	inet_ntop(AF_INET, &src_network, src_ip, sizeof(src_ip));
 	inet_ntop(AF_INET, &dst_network, dst_ip, sizeof(dst_ip));
 
-    uint32_t src_ip_addr = ipv4_header.src_addr;
-    uint16_t src_port = ((uint16_t)payload[0] << 8) | payload[1];
-    UdpEndpoint sender = {
-        .ip = src_ip_addr,
-        .port = src_port
-    };
 
-    int dispatch_result = dispatch_ipv4_protocol(ipv4_header.protocol, ipv4_header.ttl, sender, receive_timestamp, payload, payload_length, tx, stats);
-
+    int dispatch_result = dispatch_ipv4_protocol(
+        ipv4_header.protocol,
+        ipv4_header.ttl,
+        ipv4_header.src_addr,
+        receive_timestamp,
+        payload,
+        payload_length,
+        tx,
+        stats
+    );
     return dispatch_result;
 }
 
 static int dispatch_ipv4_protocol(
     uint8_t protocol, 
     uint8_t sender_ttl, 
-    UdpEndpoint sender, 
+    uint32_t sender_ip,
     const NtpTimestamp *receive_timestamp, 
     const uint8_t *payload, 
     size_t payload_length, 
@@ -176,6 +178,11 @@ static int dispatch_ipv4_protocol(
             if (udp_header.length > payload_length) {
                 return -1;
             }
+
+            UdpEndpoint sender = {
+                .ip = sender_ip,
+                .port = udp_header.src_port
+            };
             
             printf("UDP %u -> %u\n",
                 udp_header.src_port,
