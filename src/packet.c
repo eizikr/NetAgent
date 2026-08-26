@@ -21,18 +21,6 @@ static int dispatch_ipv4_protocol(
     const NetAgentConfig *config
 );
 
-static int dispatch_udp_payload(
-    const UdpEndpoint *sender,
-    uint8_t sender_ttl,
-    uint16_t dst_port,
-    const uint8_t *payload,
-    size_t payload_length,
-    const NtpTimestamp *receive_timestamp,
-    const UdpTxSocket *tx,
-    NetAgentStats *stats,
-    const NetAgentConfig *config
-);
-
 int process_packet(
     const uint8_t *packet,
     size_t length,
@@ -150,31 +138,4 @@ static int dispatch_ipv4_protocol(
             /* unsupported */
             return 0;
     }
-}
-
-static int dispatch_udp_payload(
-    const UdpEndpoint *sender,
-    uint8_t sender_ttl,
-    uint16_t dst_port,
-    const uint8_t *payload,
-    size_t payload_length,
-    const NtpTimestamp *receive_timestamp,
-    const UdpTxSocket *tx,
-    NetAgentStats *stats,
-    const NetAgentConfig *config)
-{
-    if (dst_port == config->twamp_port) {
-        return twamp_reflector_handle_packet(
-            payload,
-            payload_length,
-            sender,
-            sender_ttl,
-            receive_timestamp,
-            tx,
-            stats
-        );
-    }
-
-    printf("Generic UDP traffic on port %u\n", dst_port);
-    return 0;
 }

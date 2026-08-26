@@ -19,4 +19,14 @@ int twamp_reflector_handle_packet(
     NetAgentStats *stats
 );
 
+int twamp_reflector_build_response(
+    const uint8_t *payload,
+    size_t payload_length,
+    uint8_t sender_ttl,
+    const NtpTimestamp *receive_timestamp,
+    uint8_t *tx_buffer,
+    size_t tx_buffer_length,
+    uint32_t *sender_sequence
+);
+
 #endif

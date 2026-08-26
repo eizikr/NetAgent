@@ -155,6 +155,11 @@ target_compile_options(test_twamp PRIVATE
     -Wpedantic
 )
 
+target_compile_definitions(test_twamp PRIVATE
+    _POSIX_C_SOURCE=200809L
+    _GNU_SOURCE
+)
+
 add_test(
     NAME twamp_parser
     COMMAND test_twamp
@@ -176,6 +181,40 @@ add_test(
     NAME stats_tracking
     COMMAND test_stats
 )
+
+
+#########################
+# TWAMP REFLECTOR TESTS #
+#########################
+
+add_executable(test_twamp_reflector
+    tests/test_twamp_reflector.c
+    src/twamp.c
+    src/twamp_reflector.c
+    src/stats.c
+    src/tx.c
+)
+
+target_include_directories(test_twamp_reflector PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_compile_options(test_twamp_reflector PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+)
+
+target_compile_definitions(test_twamp_reflector PRIVATE
+    _POSIX_C_SOURCE=200809L
+    _GNU_SOURCE
+)
+
+add_test(
+    NAME twamp_reflector
+    COMMAND test_twamp_reflector
+)
+
 
 # cmake -S . -B build/cmake  (Create build system)
 # cmake --build build/cmake  (Activate the build system)
