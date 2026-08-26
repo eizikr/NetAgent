@@ -157,6 +157,22 @@ add_test(
     COMMAND test_twamp
 )
 
+###############
+# STATS TESTS #
+###############
+add_executable(test_stats
+    src/stats.c
+    tests/test_stats.c
+)
+
+target_include_directories(test_stats PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+add_test(
+    NAME stats_tracking
+    COMMAND test_stats
+)
 
 # cmake -S . -B build/cmake  (Create build system)
 # cmake --build build/cmake  (Activate the build system)
