@@ -7,6 +7,7 @@ static int test_normal_sequence(void);
 static int test_sequence_gap(void);
 static int test_duplicate(void);
 static int test_out_of_order(void);
+static int test_sequence_wraparound(void);
 
 int main(void)
 {
@@ -25,10 +26,49 @@ int main(void)
     if (test_out_of_order() != 0)
         return 1;
 
+    if (test_sequence_wraparound() != 0)
+        return 1;
+
     puts("test_stats: PASS");
     return 0;
 }
 
+static int test_sequence_wraparound(void)
+{
+    NetAgentStats stats;
+    stats_init(&stats);
+
+    stats_track_sequence(&stats, 0xFFFFFFFE);
+    stats_track_sequence(&stats, 0xFFFFFFFF);
+    stats_track_sequence(&stats, 0);
+    stats_track_sequence(&stats, 1);
+
+    if (stats.sequence_gaps != 0) {
+        fprintf(stderr,
+                "Wrap-around incorrectly detected a gap\n");
+        return 1;
+    }
+
+    if (stats.duplicates != 0) {
+        fprintf(stderr,
+                "Wrap-around incorrectly detected a duplicate\n");
+        return 1;
+    }
+
+    if (stats.out_of_order != 0) {
+        fprintf(stderr,
+                "Wrap-around incorrectly detected out-of-order\n");
+        return 1;
+    }
+
+    if (stats.last_sender_sequence != 1) {
+        fprintf(stderr,
+                "Expected last sequence 1 after wrap-around\n");
+        return 1;
+    }
+
+    return 0;
+}
 
 static int test_first_sequence(void)
 {

@@ -64,28 +64,41 @@ void stats_track_sequence(
         return;
     }
 
-    uint32_t expected =
-        stats->last_sender_sequence + 1;
+    uint32_t last = stats->last_sender_sequence;
+    uint32_t expected = last + 1;
 
     if (sequence == expected) {
-        /* normal packet */
+        /*
+         * Normal next packet.
+         *
+         * uint32_t arithmetic intentionally handles:
+         * 0xFFFFFFFF + 1 -> 0
+         */
+        stats->last_sender_sequence = sequence;
+        return;
     }
-    else if (sequence == stats->last_sender_sequence) {
+
+    if (sequence == last) {
         stats->duplicates++;
-    }
-    else if (sequence > expected) {
-        stats->sequence_gaps +=
-            (uint64_t)(sequence - expected);
-    }
-    else {
-        stats->out_of_order++;
+        return;
     }
 
     /*
-     * Only advance the last sequence if this packet
-     * is newer than the previous one.
+     * Signed modular difference.
+     *
+     * Positive  -> sequence is ahead of last.
+     * Negative  -> sequence is behind last.
      */
-    if (sequence > stats->last_sender_sequence) {
+    int32_t difference =
+        (int32_t)(sequence - last);
+
+    if (difference > 0) {
+        stats->sequence_gaps +=
+            (uint64_t)(difference - 1);
+
         stats->last_sender_sequence = sequence;
+    }
+    else {
+        stats->out_of_order++;
     }
 }
