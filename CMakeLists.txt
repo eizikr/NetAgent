@@ -19,6 +19,7 @@ add_executable(netagent
 	src/capture.c
     src/tx.c
     src/stats.c
+    src/twamp_reflector.c
 )
 
 target_compile_definitions(netagent PRIVATE
