@@ -17,7 +17,8 @@ static int dispatch_ipv4_protocol(
     const NtpTimestamp *receive_timestamp,
     const uint8_t *payload,
     size_t payload_length,
-    const UdpTxSocket *tx
+    const UdpTxSocket *tx,
+    NetAgentStats *stats
 );
 
 static int dispatch_udp_payload(
@@ -27,10 +28,11 @@ static int dispatch_udp_payload(
     const uint8_t *payload,
     size_t payload_length,
     const NtpTimestamp *receive_timestamp,
-    const UdpTxSocket *tx
+    const UdpTxSocket *tx,
+    NetAgentStats *stats
 );
 
-int process_packet(const uint8_t *packet, size_t length, const NtpTimestamp *receive_timestamp, const UdpTxSocket *tx){
+int process_packet(const uint8_t *packet, size_t length, const NtpTimestamp *receive_timestamp, const UdpTxSocket *tx, NetAgentStats *stats) {
     EthernetHeader header;
 	IPv4Header ipv4_header;
 
@@ -113,12 +115,21 @@ int process_packet(const uint8_t *packet, size_t length, const NtpTimestamp *rec
         .port = src_port
     };
 
-    int dispatch_result = dispatch_ipv4_protocol(ipv4_header.protocol, ipv4_header.ttl, sender, receive_timestamp, payload, payload_length, tx);
+    int dispatch_result = dispatch_ipv4_protocol(ipv4_header.protocol, ipv4_header.ttl, sender, receive_timestamp, payload, payload_length, tx, stats);
 
     return dispatch_result;
 }
 
-static int dispatch_ipv4_protocol(uint8_t protocol, uint8_t sender_ttl, UdpEndpoint sender, const NtpTimestamp *receive_timestamp, const uint8_t *payload, size_t payload_length,   const UdpTxSocket *tx){
+static int dispatch_ipv4_protocol(
+    uint8_t protocol, 
+    uint8_t sender_ttl, 
+    UdpEndpoint sender, 
+    const NtpTimestamp *receive_timestamp, 
+    const uint8_t *payload, 
+    size_t payload_length, 
+    const UdpTxSocket *tx, 
+    NetAgentStats *stats
+){
     switch (protocol) {
         case IP_PROTO_ICMP: {
             ICMPHeader icmp_header;
@@ -181,7 +192,8 @@ static int dispatch_ipv4_protocol(uint8_t protocol, uint8_t sender_ttl, UdpEndpo
                 udp_payload,
                 udp_payload_length,
                 receive_timestamp,
-                tx
+                tx,
+                stats
             );
         }
 
@@ -200,7 +212,8 @@ static int dispatch_udp_payload(
     const uint8_t *payload,
     size_t payload_length,
     const NtpTimestamp *receive_timestamp,
-    const UdpTxSocket *tx)
+    const UdpTxSocket *tx,
+    NetAgentStats *stats)
 {
     switch (dst_port) {
     case 20481:{
@@ -217,8 +230,16 @@ static int dispatch_udp_payload(
 
         if (result != 0) {
             fprintf(stderr, "Failed to parse TWAMP sender packet\n");
+            stats->parse_errors++;
             return result;
         }
+        stats->twamp_received++;
+
+        stats_track_sequence(
+            stats,
+            sender_packet.sequence_number
+        );
+
         response.sender_ttl = sender_ttl;
         result = build_twamp_reflector_response(
             &sender_packet,
@@ -250,12 +271,68 @@ static int dispatch_udp_payload(
             return result;
         }
 
-        return udp_tx_send(
+        result = udp_tx_send(
             tx,
             sender,
             tx_buffer,
             sizeof(tx_buffer)
         );
+
+        if (result != 0) {
+            stats->tx_errors++;
+            return result;
+        }
+
+        stats->twamp_sent++;
+
+        struct timespec kernel_tx_timestamp;
+
+        if (udp_tx_read_timestamp(
+                tx,
+                &kernel_tx_timestamp) != 0) {
+
+            fprintf(stderr, "Failed to get kernel TX timestamp\n");
+            return -1;
+        }
+
+
+        NtpTimestamp kernel_tx_ntp;
+
+        if (timespec_to_ntp(
+                &kernel_tx_timestamp,
+                &kernel_tx_ntp) != 0) {
+            fprintf(stderr, "Failed to convert TX timestamp to NTP\n");
+            return -1;
+        }
+
+        uint64_t embedded =
+            ((uint64_t)response.timestamp_seconds << 32) |
+            response.timestamp_fraction;
+
+        uint64_t kernel_tx =
+            ((uint64_t)kernel_tx_ntp.seconds << 32) |
+            kernel_tx_ntp.fraction;
+
+        uint64_t delta_ntp = kernel_tx - embedded;
+        double delta_us =
+            ((double)delta_ntp * 1000000.0) /
+            4294967296.0;
+
+        printf(
+            "Embedded T3:  %u.%08x\n",
+            response.timestamp_seconds,
+            response.timestamp_fraction
+        );
+
+        printf(
+            "Kernel TX T3: %u.%08x\n",
+            kernel_tx_ntp.seconds,
+            kernel_tx_ntp.fraction
+        );
+
+        printf("T3 delta:     %.3f us\n", delta_us);
+
+        return 0;
 
     }
     default:

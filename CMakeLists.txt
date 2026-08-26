@@ -18,6 +18,12 @@ add_executable(netagent
 	src/twamp.c
 	src/capture.c
     src/tx.c
+    src/stats.c
+)
+
+target_compile_definitions(netagent PRIVATE
+    _POSIX_C_SOURCE=200809L
+    _GNU_SOURCE
 )
 
 target_include_directories(netagent PRIVATE

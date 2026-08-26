@@ -3,12 +3,20 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <time.h>
+
 #include "netagent/endpoint.h"
+
 
 typedef struct {
     int fd;
     uint16_t local_port;
 } UdpTxSocket;
+
+int udp_tx_read_timestamp(
+    const UdpTxSocket *tx,
+    struct timespec *timestamp
+);
 
 int udp_tx_open(
     UdpTxSocket *tx,

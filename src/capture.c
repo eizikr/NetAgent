@@ -1,9 +1,7 @@
-#define _POSIX_C_SOURCE 200809L
-#define _GNU_SOURCE
-
 #include "netagent/capture.h"
 #include "netagent/packet.h"
 #include "netagent/twamp.h"
+#include "netagent/stats.h"
 #include "netagent/tx.h"
 
 #include <linux/if_packet.h>
@@ -24,6 +22,7 @@
 static volatile sig_atomic_t stop_requested = 0;
 
 static int attach_udp_port_filter(int fd, uint16_t port);
+
 static void handle_sigint(int signo)
 {
     (void)signo;
@@ -36,6 +35,9 @@ int capture_packets(const char *interface_name , uint16_t port) {
     uint8_t buffer[PACKET_BUFFER_SIZE];
     UdpTxSocket tx = { .fd = -1, .local_port = 0 };
     int enable_timestamp = 1;
+
+    NetAgentStats stats;
+    stats_init(&stats);
 
     if (interface_name == NULL) {
         fprintf(stderr, "Interface name is NULL\n");
@@ -60,7 +62,7 @@ int capture_packets(const char *interface_name , uint16_t port) {
     if (setsockopt(
             fd,
             SOL_SOCKET,
-            SO_TIMESTAMPNS,
+            SO_TIMESTAMPNS,                     // timestamp inside the packet
             &enable_timestamp,
             sizeof(enable_timestamp)) < 0) {
 
@@ -87,6 +89,7 @@ int capture_packets(const char *interface_name , uint16_t port) {
         perror("bind");
         goto error_handling;
     }
+
     printf("Raw socket bound to %s (ifindex=%u)\n",
            interface_name,
            ifindex);
@@ -113,6 +116,7 @@ int capture_packets(const char *interface_name , uint16_t port) {
         fprintf(stderr, "Failed to open UDP TX socket\n");
         goto error_handling;
     }
+
     printf("UDP TX socket bound to port %u\n", tx.local_port);
 
     while(!stop_requested){
@@ -147,10 +151,12 @@ int capture_packets(const char *interface_name , uint16_t port) {
             if (errno == EINTR && stop_requested) {
                 break;
             }
-
+            
             perror("recvmsg");
             goto error_handling;
         }
+
+        stats.packets_received++;
 
         struct timespec *kernel_timestamp = NULL;
 
@@ -183,7 +189,14 @@ int capture_packets(const char *interface_name , uint16_t port) {
             continue;
         }
 
-        int result = process_packet(buffer, (size_t)received_length, &receive_timestamp, &tx);
+        int result = process_packet(
+            buffer,
+            (size_t)received_length,
+            &receive_timestamp,
+            &tx,
+            &stats
+        );
+
         if (result < 0) {
             fprintf(stderr, "Packet processing failed: %d\n", result);
         }
@@ -192,16 +205,21 @@ int capture_packets(const char *interface_name , uint16_t port) {
 
 
     puts("\nStopping NetAgent...");
+    stats_print(&stats);
+
     udp_tx_close(&tx);
     close(fd);
+
     return 0;
 
 error_handling:
+
     udp_tx_close(&tx);
 
     if (fd >= 0) {
         close(fd);
     }
+
     return -1;
 
 }

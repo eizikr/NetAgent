@@ -1,5 +1,4 @@
 #define NTP_UNIX_EPOCH_OFFSET 2208988800UL
-#define _POSIX_C_SOURCE 200809L
 
 #include "netagent/twamp.h"
 
