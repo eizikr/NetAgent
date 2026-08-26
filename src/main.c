@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "netagent/capture.h"
+#include "netagent/config.h"
 
 int main(int argc, char *argv[]){
 
@@ -24,7 +25,12 @@ int main(int argc, char *argv[]){
 	puts("NetAgent v0.1.0");
 	printf("Listening on %s, UDP port %u\n", interface_name, port);
 
-	return capture_packets(interface_name, port);
+	NetAgentConfig config = {
+		.interface_name = interface_name,
+		.twamp_port = port
+	};
+
+	return capture_packets(&config);
 
 }
 

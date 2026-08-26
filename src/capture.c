@@ -30,7 +30,7 @@ static void handle_sigint(int signo)
 }
 
 
-int capture_packets(const char *interface_name , uint16_t port) {
+int capture_packets(const NetAgentConfig *config) {
 
     uint8_t buffer[PACKET_BUFFER_SIZE];
     UdpTxSocket tx = { .fd = -1, .local_port = 0 };
@@ -39,10 +39,16 @@ int capture_packets(const char *interface_name , uint16_t port) {
     NetAgentStats stats;
     stats_init(&stats);
 
-    if (interface_name == NULL) {
-        fprintf(stderr, "Interface name is NULL\n");
+    if (config == NULL ||
+        config->interface_name == NULL) {
         return -1;
     }
+
+    const char *interface_name =
+        config->interface_name;
+
+    uint16_t port =
+        config->twamp_port;
 
     int fd = socket(
         AF_PACKET,          // use layer 2 (Ethernet) socket
@@ -194,7 +200,8 @@ int capture_packets(const char *interface_name , uint16_t port) {
             (size_t)received_length,
             &receive_timestamp,
             &tx,
-            &stats
+            &stats,
+            config
         );
 
         if (result < 0) {

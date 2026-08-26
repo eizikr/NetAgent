@@ -20,6 +20,8 @@ add_executable(netagent
     src/tx.c
     src/stats.c
     src/twamp_reflector.c
+    src/icmp_handler.c
+    src/udp_handler.c
 )
 
 target_compile_definitions(netagent PRIVATE

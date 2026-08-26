@@ -5,6 +5,9 @@
 #include <stdint.h>
 
 #define ETHERNET_HEADER_SIZE 14
+#define ETHERTYPE_IPV4 0x0800
+#define ETHERTYPE_ARP  0x0806
+#define ETHERTYPE_IPV6 0x86DD
 
 typedef enum {
 	ETH_OK=0,

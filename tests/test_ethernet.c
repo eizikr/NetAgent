@@ -42,7 +42,7 @@ int main(void)
         return 1;
     }
 
-    if (header.ethertype != 0x0800) {
+    if (header.ethertype != ETHERTYPE_IPV4) {
         fprintf(stderr, "EtherType mismatch\n");
         return 1;
     }
