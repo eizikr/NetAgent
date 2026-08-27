@@ -1,6 +1,7 @@
 #define NTP_UNIX_EPOCH_OFFSET 2208988800UL
 
 #include "netagent/twamp.h"
+#include "netagent/log.h"
 
 #include <stdio.h>
 #include <time.h>
@@ -46,7 +47,7 @@ int parse_twamp_sender(
 //      Total     14 bytes
 
     if (buffer == NULL || packet == NULL || length < TWAMP_SENDER_MIN_SIZE) {
-        puts("Invalid input to parse_twamp_sender");
+        log_info("Invalid input to parse_twamp_sender");
         return -1;
     }
 
@@ -81,7 +82,7 @@ int build_twamp_reflector_response(
     if (sender == NULL ||
         receive_timestamp == NULL ||
         response == NULL) {
-        puts("Invalid input to build_twamp_reflector_response");
+        log_info("Invalid input to build_twamp_reflector_response");
         return -1;
     }
     response->sequence_number = sender->sequence_number;
@@ -102,12 +103,14 @@ int build_twamp_reflector_response(
 int ntp_timestamp_now(NtpTimestamp *timestamp)
 {
     if (timestamp == NULL) {
+        log_error("Invalid input to ntp_timestamp_now\n");
         return -1;
     }
 
     struct timespec ts;
 
     if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
+        log_error("Failed to get current time using clock_gettime\n");
         return -1;
     }
 
@@ -132,6 +135,7 @@ int serialize_twamp_reflector(
     if (packet == NULL ||
         buffer == NULL ||
         buffer_length < TWAMP_REFLECTOR_FIXED_SIZE) {
+        log_error("Invalid input to serialize_twamp_reflector\n");
         return -1;
     }
 
@@ -234,6 +238,7 @@ int set_twamp_transmit_timestamp(
 ){
     NtpTimestamp T3;
     if (ntp_timestamp_now(&T3) != 0) {
+        log_error("Failed to get current NTP timestamp\n");
         return -1;
     }
 

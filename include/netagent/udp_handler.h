@@ -15,7 +15,7 @@ int udp_handle_packet(
     const uint8_t *payload,
     size_t payload_length,
     const NtpTimestamp *receive_timestamp,
-    const UdpTxSocket *tx,
+    const PacketSender *packet_sender,
     NetAgentStats *stats,
     const NetAgentConfig *config
 );

@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <time.h>
 
+#include "netagent/packet_sender.h"
 #include "netagent/endpoint.h"
-
 
 typedef struct {
     int fd;
@@ -32,6 +32,13 @@ int udp_tx_send(
 
 void udp_tx_close(
     UdpTxSocket *tx
+);
+
+int udp_tx_packet_sender_send(
+    void *context,
+    const UdpEndpoint *destination,
+    const uint8_t *buffer,
+    size_t length
 );
 
 #endif

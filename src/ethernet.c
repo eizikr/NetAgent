@@ -1,22 +1,24 @@
 #include <stdio.h>
-#include "netagent/ethernet.h"
 #include <string.h>
+
+#include "netagent/ethernet.h"
+#include "netagent/log.h"
 
 
 int parse_ethernet(const uint8_t *buffer, size_t length, EthernetHeader *header)
 {
     if (buffer == NULL){
-	puts("ERROR: buffer argument is NULL");
+        log_error("ERROR: buffer argument is NULL");
         return ERR_BUFFER_NULL;
     }
 
     if (header == NULL){
-	puts("ERROR: header argument is NULL");
+	    log_error("ERROR: header argument is NULL");
         return ERR_HEADER_NULL;
     }
 
     if (length < 14){
-        puts("ERROR: buffer length is short");
+        log_error("ERROR: buffer length is short");
         return ERR_ARGS;
     }
 

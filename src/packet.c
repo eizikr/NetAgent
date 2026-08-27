@@ -1,12 +1,15 @@
 #include <stdio.h>
 
 #include "netagent/twamp_reflector.h"
+#include "netagent/packet_sender.h"
 #include "netagent/icmp_handler.h"
 #include "netagent/udp_handler.h"
 #include "netagent/ethernet.h"
+#include "netagent/config.h"
 #include "netagent/packet.h"
 #include "netagent/twamp.h"
 #include "netagent/ipv4.h"
+#include "netagent/log.h"
 #include "netagent/tx.h"
 
 static int dispatch_ipv4_protocol(
@@ -16,7 +19,7 @@ static int dispatch_ipv4_protocol(
     const NtpTimestamp *receive_timestamp,
     const uint8_t *payload,
     size_t payload_length,
-    const UdpTxSocket *tx,
+    const PacketSender *sender,
     NetAgentStats *stats,
     const NetAgentConfig *config
 );
@@ -25,7 +28,7 @@ int process_packet(
     const uint8_t *packet,
     size_t length,
     const NtpTimestamp *receive_timestamp,
-    const UdpTxSocket *tx,
+    const PacketSender *sender,
     NetAgentStats *stats,
     const NetAgentConfig *config)
 {
@@ -34,12 +37,14 @@ int process_packet(
 
     if (packet == NULL ||
         receive_timestamp == NULL ||
-        tx == NULL ||
+        sender == NULL ||
         stats == NULL) {
+        log_error("Invalid input to process_packet\n");
         return -1;
     }
 
     if (length < ETHERNET_HEADER_SIZE) {
+        log_error("Packet length is too short to contain Ethernet header\n");
         return -1;
     }
 
@@ -50,7 +55,7 @@ int process_packet(
     );
 
     if (result != ETH_OK) {
-        fprintf(stderr, "Failed to parse Ethernet header\n");
+        log_error("Failed to parse Ethernet header\n");
         return result;
     }
 
@@ -71,7 +76,7 @@ int process_packet(
     );
 
     if (result != 0) {
-        fprintf(stderr, "Failed to parse IPv4 header\n");
+        log_error("Failed to parse IPv4 header\n");
         return result;
     }
 
@@ -79,6 +84,7 @@ int process_packet(
         (size_t)ipv4_header.ihl * 4;
 
     if (ipv4_header_length > ipv4_length) {
+        log_error("IPv4 header length exceeds packet length\n");
         return -1;
     }
 
@@ -95,7 +101,7 @@ int process_packet(
         receive_timestamp,
         payload,
         payload_length,
-        tx,
+        sender,
         stats,
         config
     );
@@ -108,7 +114,7 @@ static int dispatch_ipv4_protocol(
     const NtpTimestamp *receive_timestamp, 
     const uint8_t *payload, 
     size_t payload_length, 
-    const UdpTxSocket *tx, 
+    const PacketSender *sender,
     NetAgentStats *stats,
     const NetAgentConfig *config
 ){
@@ -129,7 +135,7 @@ static int dispatch_ipv4_protocol(
             payload,
             payload_length,
             receive_timestamp,
-            tx,
+            sender,
             stats,
             config
         );

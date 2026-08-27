@@ -1,5 +1,3 @@
-#include "netagent/tx.h"
-
 #include <linux/net_tstamp.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -8,11 +6,15 @@
 #include <stdio.h>
 #include <poll.h>
 
+#include "netagent/log.h"
+#include "netagent/tx.h"
+
 int udp_tx_read_timestamp(
     const UdpTxSocket *tx,
     struct timespec *timestamp)
 {
     if (tx == NULL || tx->fd < 0 || timestamp == NULL) {
+        log_error("Invalid input to udp_tx_read_timestamp\n");
         return -1;
     }
 
@@ -36,7 +38,7 @@ int udp_tx_read_timestamp(
     }
 
     if (poll_result == 0) {
-        fprintf(stderr, "Timed out waiting for TX timestamp\n");
+        log_error("Timed out waiting for TX timestamp\n");
         return -1;
     }
 
@@ -91,7 +93,7 @@ int udp_tx_read_timestamp(
         }
     }
 
-    fprintf(stderr, "TX timestamp not found in error queue\n");
+    log_error("TX timestamp not found in error queue\n");
 
     return -1;
 }
@@ -101,6 +103,7 @@ int udp_tx_open(
     uint16_t local_port)
 {
     if (tx == NULL) {
+        log_error("Invalid input to udp_tx_open\n");
         return -1;
     }
 
@@ -131,7 +134,7 @@ int udp_tx_open(
         return -1;
     }
 
-    puts("Kernel TX software timestamping enabled");
+    log_info("Kernel TX software timestamping enabled");
 
     struct sockaddr_in local_addr;
     memset(&local_addr, 0, sizeof(local_addr));
@@ -165,6 +168,7 @@ int udp_tx_send(
         tx->fd < 0 ||
         destination == NULL ||
         payload == NULL) {
+        log_error("Invalid input to udp_tx_send\n");
         return -1;
     }
 
@@ -193,7 +197,7 @@ int udp_tx_send(
     }
 
     if ((size_t)sent != payload_length) {
-        fprintf(stderr, "Partial UDP send\n");
+        log_error("Partial UDP send\n");
         return -1;
     }
 
@@ -203,6 +207,7 @@ int udp_tx_send(
 void udp_tx_close(UdpTxSocket *tx)
 {
     if (tx == NULL) {
+        log_error("Invalid input to udp_tx_close\n");
         return;
     }
 
@@ -210,4 +215,25 @@ void udp_tx_close(UdpTxSocket *tx)
         close(tx->fd);
         tx->fd = -1;
     }
+}
+
+int udp_tx_packet_sender_send(
+    void *context,
+    const UdpEndpoint *destination,
+    const uint8_t *buffer,
+    size_t length)
+{
+    if (context == NULL) {
+        return -1;
+    }
+
+    UdpTxSocket *tx =
+        (UdpTxSocket *)context;
+
+    return udp_tx_send(
+        tx,
+        destination,
+        buffer,
+        length
+    );
 }

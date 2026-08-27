@@ -22,6 +22,7 @@ add_executable(netagent
     src/twamp_reflector.c
     src/icmp_handler.c
     src/udp_handler.c
+    src/log.c
 )
 
 target_compile_definitions(netagent PRIVATE
@@ -48,6 +49,7 @@ target_compile_options(netagent PRIVATE	# Add warnings, private because those fl
 add_executable(test_ethernet
     tests/test_ethernet.c
     src/ethernet.c
+    src/log.c
 )
 
 target_include_directories(test_ethernet PRIVATE
@@ -71,6 +73,7 @@ add_test(
 add_executable(test_ipv4
     tests/test_ipv4.c
     src/ipv4.c
+    src/log.c
 )
 
 target_include_directories(test_ipv4 PRIVATE
@@ -96,6 +99,7 @@ add_test(
 add_executable(test_udp
     tests/test_udp.c
     src/udp.c
+    src/log.c
 )
 
 target_include_directories(test_udp PRIVATE
@@ -119,6 +123,7 @@ add_test(
 add_executable(test_icmp
     tests/test_icmp.c
     src/icmp.c
+    src/log.c
 )
 
 target_include_directories(test_icmp PRIVATE
@@ -143,6 +148,7 @@ add_test(
 add_executable(test_twamp
     tests/test_twamp.c
     src/twamp.c
+    src/log.c
 )
 
 target_include_directories(test_twamp PRIVATE
@@ -171,6 +177,7 @@ add_test(
 add_executable(test_stats
     src/stats.c
     tests/test_stats.c
+    src/log.c
 )
 
 target_include_directories(test_stats PRIVATE
@@ -193,6 +200,7 @@ add_executable(test_twamp_reflector
     src/twamp_reflector.c
     src/stats.c
     src/tx.c
+    src/log.c
 )
 
 target_include_directories(test_twamp_reflector PRIVATE
@@ -215,6 +223,38 @@ add_test(
     COMMAND test_twamp_reflector
 )
 
+#####################
+# PACKET FLOW TESTS #
+#####################
+
+add_executable(test_packet_flow
+    tests/test_packet_flow.c
+    src/packet.c
+    src/ethernet.c
+    src/ipv4.c
+    src/udp.c
+    src/udp_handler.c
+    src/icmp.c
+    src/icmp_handler.c
+    src/twamp.c
+    src/twamp_reflector.c
+    src/stats.c
+    src/log.c
+)
+
+target_include_directories(test_packet_flow PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_compile_definitions(test_packet_flow PRIVATE
+    _POSIX_C_SOURCE=200809L
+    _GNU_SOURCE
+)
+
+add_test(
+    NAME packet_flow
+    COMMAND test_packet_flow
+)
 
 # cmake -S . -B build/cmake  (Create build system)
 # cmake --build build/cmake  (Activate the build system)

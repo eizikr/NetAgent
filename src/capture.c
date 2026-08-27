@@ -2,6 +2,7 @@
 #include "netagent/packet.h"
 #include "netagent/twamp.h"
 #include "netagent/stats.h"
+#include "netagent/log.h"
 #include "netagent/tx.h"
 
 #include <linux/if_packet.h>
@@ -41,6 +42,7 @@ int capture_packets(const NetAgentConfig *config) {
 
     if (config == NULL ||
         config->interface_name == NULL) {
+        log_error("Invalid input to capture_packets\n");
         return -1;
     }
 
@@ -62,6 +64,7 @@ int capture_packets(const NetAgentConfig *config) {
             if socket() fails, the kernel return error and libc will update errno
             perror() will make errno human readable and print it to stderr
         */
+        log_error("Failed to create raw socket\n");
         return -1;
     }
 
@@ -76,7 +79,7 @@ int capture_packets(const NetAgentConfig *config) {
         goto error_handling;
     }
 
-    puts("Kernel RX timestamping enabled");
+    log_info("Kernel RX timestamping enabled");
 
     unsigned int ifindex = if_nametoindex(interface_name); // convert "ens33" to "2"
 
@@ -96,7 +99,7 @@ int capture_packets(const NetAgentConfig *config) {
         goto error_handling;
     }
 
-    printf("Raw socket bound to %s (ifindex=%u)\n",
+    log_info("Raw socket bound to %s (ifindex=%u)\n",
            interface_name,
            ifindex);
 
@@ -114,16 +117,21 @@ int capture_packets(const NetAgentConfig *config) {
 
 
     if (attach_udp_port_filter(fd, port) != 0) {
-        puts("Failed to attach BPF filter");
+        log_error("Failed to attach BPF filter");
         goto error_handling;
     }
 
     if (udp_tx_open(&tx, port) != 0) {
-        fprintf(stderr, "Failed to open UDP TX socket\n");
+        log_error("Failed to open UDP TX socket");
         goto error_handling;
     }
 
-    printf("UDP TX socket bound to port %u\n", tx.local_port);
+    log_info("UDP TX socket bound to port %u", tx.local_port);
+
+    PacketSender sender = {
+        .send = udp_tx_packet_sender_send,
+        .context = &tx
+    };
 
     while(!stop_requested){
         
@@ -149,7 +157,7 @@ int capture_packets(const NetAgentConfig *config) {
         );
 
         if (msg.msg_flags & MSG_CTRUNC) {
-            fprintf(stderr, "Control data truncated\n");
+            log_error("Control data truncated\n");
             continue;
         }
 
@@ -183,7 +191,7 @@ int capture_packets(const NetAgentConfig *config) {
         NtpTimestamp receive_timestamp;
 
         if (kernel_timestamp == NULL) {
-            fprintf(stderr, "Missing kernel RX timestamp\n");
+            log_error("Missing kernel RX timestamp\n");
             continue;
         }
 
@@ -191,7 +199,7 @@ int capture_packets(const NetAgentConfig *config) {
                 kernel_timestamp,
                 &receive_timestamp) != 0) {
 
-            fprintf(stderr, "Failed to convert RX timestamp to NTP\n");
+            log_error("Failed to convert RX timestamp to NTP\n");
             continue;
         }
 
@@ -199,19 +207,19 @@ int capture_packets(const NetAgentConfig *config) {
             buffer,
             (size_t)received_length,
             &receive_timestamp,
-            &tx,
+            &sender,
             &stats,
             config
         );
 
         if (result < 0) {
-            fprintf(stderr, "Packet processing failed: %d\n", result);
+            log_error("Packet processing failed: %d\n", result);
         }
     }
 
 
-
-    puts("\nStopping NetAgent...");
+    printf("\n");
+    log_info("Stopping NetAgent...\n");
     stats_print(&stats);
 
     udp_tx_close(&tx);

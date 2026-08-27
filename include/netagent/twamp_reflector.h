@@ -13,9 +13,9 @@ int twamp_reflector_handle_packet(
     const uint8_t *payload,
     size_t payload_length,
     const UdpEndpoint *sender,
+    const PacketSender *packet_sender,
     uint8_t sender_ttl,
     const NtpTimestamp *receive_timestamp,
-    const UdpTxSocket *tx,
     NetAgentStats *stats
 );
 

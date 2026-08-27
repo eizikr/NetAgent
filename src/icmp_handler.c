@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "netagent/icmp.h"
+#include "netagent/log.h"
 
 int icmp_handle_packet(
     const uint8_t *payload,
@@ -17,29 +18,29 @@ int icmp_handle_packet(
     );
 
     if (result != 0) {
-        fprintf(stderr, "Failed to parse ICMP header\n");
+        log_error("Failed to parse ICMP header\n");
         return result;
     }
 
     switch (icmp_header.type) {
 
     case ICMP_ECHO_REQUEST:
-        puts("\nICMP Echo Request");
+        log_info("ICMP Echo Request");
         break;
 
     case ICMP_ECHO_REPLY:
-        puts("\nICMP Echo Reply");
+        log_info("ICMP Echo Reply");
         break;
 
     default:
-        printf("\nICMP Type: %u\n", icmp_header.type);
+        log_info("ICMP Type: %u\n", icmp_header.type);
         break;
     }
 
-    printf("Type:                %u\n", icmp_header.type);
-    printf("Code:                %u\n", icmp_header.code);
-    printf("Identifier:          %u\n", icmp_header.identifier);
-    printf("Sequence:            %u\n", icmp_header.sequence);
+    log_info("Type:                %u\n", icmp_header.type);
+    log_info("Code:                %u\n", icmp_header.code);
+    log_info("Identifier:          %u\n", icmp_header.identifier);
+    log_info("Sequence:            %u\n", icmp_header.sequence);
 
     return 0;
 }

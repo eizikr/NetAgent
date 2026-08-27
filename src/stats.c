@@ -1,12 +1,14 @@
-#include "netagent/stats.h"
-
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "netagent/stats.h"
+#include "netagent/log.h"
+
 void stats_init(NetAgentStats *stats)
 {
     if (stats == NULL) {
+        log_error("Invalid input to stats_init\n");
         return;
     }
 
@@ -19,34 +21,34 @@ void stats_print(const NetAgentStats *stats)
         return;
     }
 
-    puts("\nNetAgent Statistics");
-    puts("-------------------");
+    log_info("NetAgent Statistics");
+    log_info("-------------------");
 
-    printf("Packets received:       %" PRIu64 "\n",
+    log_info("Packets received:       %" PRIu64 "\n",
            stats->packets_received);
 
-    printf("TWAMP received:         %" PRIu64 "\n",
+    log_info("TWAMP received:         %" PRIu64 "\n",
            stats->twamp_received);
 
-    printf("TWAMP responses sent:   %" PRIu64 "\n",
+    log_info("TWAMP responses sent:   %" PRIu64 "\n",
            stats->twamp_sent);
 
-    printf("Parse errors:           %" PRIu64 "\n",
+    log_info("Parse errors:           %" PRIu64 "\n",
            stats->parse_errors);
 
-    printf("TX errors:              %" PRIu64 "\n",
+    log_info("TX errors:              %" PRIu64 "\n",
            stats->tx_errors);
 
-    printf("Last sender sequence:   %" PRIu32 "\n",
+    log_info("Last sender sequence:   %" PRIu32 "\n",
            stats->last_sender_sequence);
 
-    printf("Sequence gaps:          %" PRIu64 "\n",
+    log_info("Sequence gaps:          %" PRIu64 "\n",
         stats->sequence_gaps);
 
-    printf("Duplicates:             %" PRIu64 "\n",
+    log_info("Duplicates:             %" PRIu64 "\n",
         stats->duplicates);
 
-    printf("Out of order:           %" PRIu64 "\n",
+    log_info("Out of order:           %" PRIu64 "\n",
         stats->out_of_order);
 }
 
@@ -55,6 +57,7 @@ void stats_track_sequence(
     uint32_t sequence)
 {
     if (stats == NULL) {
+        log_error("Invalid input to stats_track_sequence\n");
         return;
     }
 

@@ -1,9 +1,11 @@
 #include "netagent/icmp.h"
+#include "netagent/log.h"
 
 
 
 int parse_icmp(const uint8_t *buffer, size_t length, ICMPHeader *header){
     if (buffer == NULL || header == NULL || length < 8) {
+        log_error("Invalid input to parse_icmp");
         return -1;
     }
 
